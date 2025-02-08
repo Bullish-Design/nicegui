@@ -1,4 +1,10 @@
+name: Update Codemirror
+
 on: [push]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: true
 
 jobs:
   update_codemirror:
