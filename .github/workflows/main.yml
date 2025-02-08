@@ -1,3 +1,5 @@
+on: [push]
+
 jobs:
   update_codemirror:
     runs-on: ubuntu-20.04
