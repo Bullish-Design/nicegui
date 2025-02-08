@@ -1,12 +1,44 @@
-__pycache__/
-*.egg-info/
-.*.swp
-dist
-/test.py
-*.pickle
-screenshots/
-venv
-.idea
-.nicegui/
-*.sqlite*
-.DS_Store
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.lock
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
+
+# Env
+.env
+.envrc
+*.yaml
+*.nix
+*.db
+*.sqlite
+*.dot.png
+*.dot
+
+# Logs
+*log/*
+.log
+*logs*
+log/**
+*code_output*
+startup_files.txt
+
+# Misc
+**.egg-info**
+*.egg-info*
+*code_output/*
+**/__pycache__/**
+**.pyc
+# Devenv
+.devenv*
+devenv.local.nix
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml

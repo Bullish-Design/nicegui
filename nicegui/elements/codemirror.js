@@ -103,6 +103,10 @@ export default {
         effects: this.editableConfig.reconfigure(this.editableStates[!disabled]),
       });
     },
+    markText(from_line, from_point, to_line, to_point, options) {
+      if (!this.editor) return;
+      return this.editor.markText({line: from_line ,ch: from_point},{line:to_line,ch:to_point},{className: "styled-background"});
+    },
     setupExtensions() {
       const CM = this.CM;
 
@@ -175,5 +179,7 @@ export default {
     this.setLanguage(this.language);
     this.setTheme(this.theme);
     this.setDisabled(this.disable);
+    this.markText(3, 1, 5, 10, {className: "styled-background"});
+
   },
 };
