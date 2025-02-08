@@ -1,0 +1,10 @@
+jobs:
+  update_codemirror:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: Run script file
+      run: |
+         chmod +x ./scripts/codemirror/bundle.bash
+         ./scripts/codemirror/bundle.bash
+      shell: bash
