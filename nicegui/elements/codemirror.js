@@ -28,30 +28,29 @@ export default {
   },
   data() {
     return {
-      // To let other methods wait for the editor to be created because
-      // they might be called by the server before the editor is created.
       editorPromise: new Promise((resolve) => {
         this.resolveEditor = resolve;
       }),
+      highlightCompartment: null,
     };
   },
+
   methods: {
-    // Find the language's extension by its name. Case insensitive.
     findLanguage(name) {
       for (const language of this.languages)
         for (const alias of [language.name, ...language.alias])
           if (name.toLowerCase() === alias.toLowerCase()) return language;
 
       console.error(`Language not found: ${this.language}`);
-      console.info("Supported language names:", languages.map((lang) => lang.name).join(", "));
+      console.info("Supported language names:", this.languages.map((lang) => lang.name).join(", "));
       return null;
     },
-    // Get the names of all supported languages
+
     async getLanguages() {
       if (!this.editor) await this.editorPromise;
-      // Over 100 supported languages: https://github.com/codemirror/language-data/blob/main/src/language-data.ts
       return this.languages.map((lang) => lang.name).sort(Intl.Collator("en").compare);
     },
+
     setLanguage(language) {
       if (!language) {
         this.editor.dispatch({
@@ -60,7 +59,7 @@ export default {
         return;
       }
 
-      const lang_description = this.findLanguage(language, this.languages);
+      const lang_description = this.findLanguage(language);
       if (!lang_description) {
         console.error("Language not found:", language);
         return;
@@ -72,14 +71,14 @@ export default {
         });
       });
     },
+
     async getThemes() {
       if (!this.editor) await this.editorPromise;
-      // `this.themes` also contains some non-theme objects
-      // The real themes are Arrays
       return Object.keys(this.themes)
         .filter((key) => Array.isArray(this.themes[key]))
         .sort(Intl.Collator("en").compare);
     },
+
     setTheme(theme) {
       const new_theme = this.themes[theme];
       if (new_theme === undefined) {
@@ -90,6 +89,7 @@ export default {
         effects: this.themeConfig.reconfigure([new_theme]),
       });
     },
+
     setEditorValue(value) {
       if (!this.editor) return;
       if (this.editor.state.doc.toString() === value) return;
@@ -98,26 +98,61 @@ export default {
       this.editor.dispatch({ changes: { from: 0, to: this.editor.state.doc.length, insert: value } });
       this.emitting = true;
     },
+
     setDisabled(disabled) {
       this.editor.dispatch({
         effects: this.editableConfig.reconfigure(this.editableStates[!disabled]),
       });
     },
-    markText(from_line, from_point, to_line, to_point, options) {
-      if (!this.editor) return;
-      return this.editor.markText({line: from_line ,ch: from_point},{line:to_line,ch:to_point},{className: "styled-background"});
+
+    highlightText(from_pos, to_pos) {
+      if (!this.editor || !this.CM) return;
+
+      // Clear any existing highlight first
+      this.clearHighlight();
+
+      // Create the decoration
+      const decoration = this.CM.Decoration.mark({
+        class: "cm-highlight-selection"
+      });
+
+      // Create a decoration set
+      const decorationSet = this.CM.Decoration.set([
+        decoration.range(from_pos, to_pos)
+      ]);
+
+      // Apply the highlight using the compartment
+      if (this.highlightCompartment) {
+        console.log("Inside Highlight Compartment")
+        this.editor.dispatch({
+        effects: this.highlightCompartment.reconfigure(
+          this.CM.EditorView.decorations.of(decorationSet)
+        )
+      });
+      }
     },
+
+    clearHighlight() {
+      if (!this.editor || !this.highlightCompartment) return;
+      
+      // Simply reconfigure the compartment with an empty decoration set
+      this.editor.dispatch({
+        effects: this.highlightCompartment.reconfigure(
+          this.CM.EditorView.decorations.of(this.CM.Decoration.none)
+        )
+      });
+    },
+
     setupExtensions() {
       const CM = this.CM;
-
       const self = this;
 
-      // Sends a ChangeSet https://codemirror.net/docs/ref/#state.ChangeSet
-      // containing only the changes made to the document.
-      // This could potentially be optimized further by sending updates
-      // periodically instead of on every change and accumulating changesets
-      // with ChangeSet.compose.
-      const changeSender = this.CM.ViewPlugin.fromClass(
+      // Initialize the highlight compartment
+      //const highlightCompartment = new CM.Compartment
+      //highlightCompartment.of(this.CM.Decoration.none)
+      //highlightCompartment.reconfigure(this.CM.Decoration.none)
+
+      const changeSender = CM.ViewPlugin.fromClass(
         class {
           update(update) {
             if (!update.docChanged) return;
@@ -130,41 +165,48 @@ export default {
       const extensions = [
         CM.basicSetup,
         changeSender,
-        // Enables the Tab key to indent the current lines https://codemirror.net/examples/tab/
         CM.keymap.of([CM.indentWithTab]),
-        // Sets indentation https://codemirror.net/docs/ref/#language.indentUnit
         CM.indentUnit.of(this.indent),
-        // We will set these Compartments later and dynamically through props
         this.themeConfig.of([]),
         this.languageConfig.of([]),
         this.editableConfig.of([]),
+        // Initialize highlight compartment with no decorations
+        this.highlightCompartment.of(this.CM.EditorView.decorations.of(this.CM.Decoration.none)),
+        //this.highlightCompartment.of(this.CM.Decoration.none),
+        // Add highlighting styles to theme
         CM.EditorView.theme({
           "&": { height: "100%" },
           ".cm-scroller": { overflow: "auto" },
+          ".cm-highlight-selection": {
+            backgroundColor: "#ffeb3b50"
+          }
         }),
+        //highlightCompartment
       ];
 
       if (this.lineWrapping) extensions.push(CM.EditorView.lineWrapping);
       if (this.highlightWhitespace) extensions.push([CM.highlightWhitespace()]);
+      
 
       return extensions;
     },
   },
   async mounted() {
-    await this.$nextTick(); // NOTE: wait for window.path_prefix to be set
+    await this.$nextTick();
     this.CM = await import(window.path_prefix + `${this.resource_path}/editor.js`);
     const CM = this.CM;
 
-    // This is used to prevent emitting the value we just received from the server.
     this.emitting = true;
-
-    // The Compartments are used to change the properties of the editor ("extensions") dynamically
     this.themes = { ...CM.themes, oneDark: CM.oneDark };
     this.themeConfig = new CM.Compartment();
     this.languages = CM.languages;
     this.languageConfig = new CM.Compartment();
     this.editableConfig = new CM.Compartment();
-    this.editableStates = { true: CM.EditorView.editable.of(true), false: CM.EditorView.editable.of(false) };
+    this.editableStates = { 
+      true: CM.EditorView.editable.of(true), 
+      false: CM.EditorView.editable.of(false) 
+    };
+    this.highlightCompartment = new CM.Compartment();
 
     const extensions = this.setupExtensions();
 
@@ -173,13 +215,15 @@ export default {
       extensions: extensions,
       parent: this.$el,
     });
+    
+    //this.editor.dispatch({
+    //    effects: this.highlightCompartment.reconfigure(this.CM.Decoration.none)
+    //  });
 
     this.resolveEditor(this.editor);
 
     this.setLanguage(this.language);
     this.setTheme(this.theme);
     this.setDisabled(this.disable);
-    this.markText(3, 1, 5, 10, {className: "styled-background"});
-
   },
 };
